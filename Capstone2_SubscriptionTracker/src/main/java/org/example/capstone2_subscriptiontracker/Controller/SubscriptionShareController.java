@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 public class SubscriptionShareController {
     private final SubscriptionShareService subscriptionShareService;
 
-    // --- BASIC CRUD OPERATIONS ---
+
 
     @GetMapping("/get")
     public ResponseEntity<?> getAll() {
@@ -36,7 +36,6 @@ public class SubscriptionShareController {
         return ResponseEntity.status(200).body(new ApiResponse("Shared record deleted successfully"));
     }
 
-    // --- ADVANCED FEATURE ENDPOINTS ---
 
     @PostMapping("/add-member")
     public ResponseEntity<?> addShareMember(@RequestBody @Valid SubscriptionShare ss, Errors errors) {
