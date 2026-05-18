@@ -16,7 +16,6 @@ public class SubscriptionShareService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
-    // --- BASIC CRUD OPERATIONS WITH STRICT VALIDATION ---
 
     public List<SubscriptionShare> getAll() {
         List<SubscriptionShare> shares = subscriptionShareRepository.findAll();
@@ -79,7 +78,6 @@ public class SubscriptionShareService {
         }
     }
 
-    // --- ADVANCED SHARED GROUPS LOGIC NODES ---
     public void addShareMember(SubscriptionShare ss) {
         // [VALIDATION 1]: Cross-check subscription existence
         Subscription sub = subscriptionRepository.findSubscriptionById(ss.getSubscriptionId());
