@@ -127,7 +127,6 @@ public class SubscriptionService {
 
 
     //Calculates a financial commitment score out of 100
-    // This is a dynamic replacement for simple user profile queries
     public String calculateSubscriptionHealthScore(Integer userId) {
         // Check if the user account exists in the database
         User user = userRepository.findUserById(userId);
@@ -253,7 +252,6 @@ public class SubscriptionService {
     }
 
     //Scans the active portfolio to detect duplicate bills for the same platform
-    // This is an optimization replacement for standard name searches
     public List<Subscription> detectDuplicateSubscriptions(Integer userId) {
         // Verify user profile validation rules before executing double check algorithm
         if (userRepository.findUserById(userId) == null) {
@@ -596,18 +594,15 @@ public class SubscriptionService {
             );
         }
 
-        // =========================
-        // Dynamic Prompt Context
-        // =========================
+
         String dynamicContext =
                 "Service Name: " + subscription.getServiceName() +
                         ", Price: " + subscription.getPrice() + " SAR" +
                         ", Billing Cycle: " + subscription.getBillingCycle() +
                         ", Start Date: " + subscription.getStartDate();
 
-        // =========================
+
         // AI Recommendation
-        // =========================
         return openAIService.generateFinancialAdvice(dynamicContext);
     }
 
