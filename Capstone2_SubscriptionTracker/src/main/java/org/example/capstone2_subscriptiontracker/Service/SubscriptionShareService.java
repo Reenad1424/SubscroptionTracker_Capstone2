@@ -17,59 +17,66 @@ public class SubscriptionShareService {
     private final NotificationService notificationService;
 
 
+        // Get all shared member records in the system
     public List<SubscriptionShare> getAll() {
         List<SubscriptionShare> shares = subscriptionShareRepository.findAll();
-        // [EMPTY CHECK]: Check if the global database table for shares is empty
         if (shares.isEmpty()) {
-            throw new ApiException("Query Result: No shared member records exist in the entire system database");
+            throw new ApiException("No shared member records found in the system");
         }
         return shares;
     }
 
+    // Update shared member details with validation checks
     public void update(Integer id, SubscriptionShare ss) {
-        // [VALIDATION]: Check if the target group member record exists
+        // 1. Verify if the shared record exists
         SubscriptionShare old = subscriptionShareRepository.giveMeSubscriptionShareById(id);
-        if (old == null) throw new ApiException("Shared member record not found");
+        if (old == null) {
+            throw new ApiException("Shared member record not found");
+        }
 
-        // [VALIDATION]: Verify source subscription contract link integrity
+        // 2. Verify if the associated subscription contract exists
         if (subscriptionRepository.findSubscriptionById(ss.getSubscriptionId()) == null) {
             throw new ApiException("Subscription not found");
         }
 
+        // Update parameters safely
         old.setFriendName(ss.getFriendName());
         old.setFriendEmail(ss.getFriendEmail());
         old.setFriendWhatsapp(ss.getFriendWhatsapp());
         old.setPaymentStatus(ss.getPaymentStatus());
         subscriptionShareRepository.save(old);
     }
-
-    // --- INTEGRATED LOGICAL DELETE WITH BUDGET RECALCULATING ---
+    // Remove a member from the group and automatically recalculate bill splits
     public void delete(Integer retiredShareId) {
-        // [VALIDATION]: Verify if the target member profile exists before starting deletion
+        // 1. Verify if target member profile exists
         SubscriptionShare retiredMember = subscriptionShareRepository.giveMeSubscriptionShareById(retiredShareId);
         if (retiredMember == null) {
-            throw new ApiException("Deletion Failed: Target member profile node not found");
+            throw new ApiException("Target member profile not found");
         }
 
         Integer subscriptionId = retiredMember.getSubscriptionId();
         Subscription sub = subscriptionRepository.findSubscriptionById(subscriptionId);
 
+        // Delete the member record from database
         subscriptionShareRepository.delete(retiredMember);
 
+        // 2. If the subscription is still valid, recalculate the share amount for remaining friends
         if (sub != null) {
             List<SubscriptionShare> remainingMembers = subscriptionShareRepository.giveMeMembersBySubscriptionId(subscriptionId);
 
-            // Note: If the last friend exits, the owner pays the full price, so no recalculation loop is needed
+            // If group is not empty, calculate new split ratio
             if (!remainingMembers.isEmpty()) {
-                double splitCount = remainingMembers.size() + 1;
+                double splitCount = remainingMembers.size() + 1; // Remaining friends + Owner account
                 double newIndividualShare = sub.getPrice() / splitCount;
 
+                // Loop to update remaining members with the new balance and send alerts
                 for (SubscriptionShare m : remainingMembers) {
                     m.setShareAmount(newIndividualShare);
                     subscriptionShareRepository.save(m);
 
-                    String text = "💡 [Budget Adjustment Alert]: A member has withdrawn from your shared group for '" + sub.getServiceName() + "'. " +
-                            "Your updated monthly share amount has been automatically recalculated to: " + String.format("%.2f", newIndividualShare) + " SAR.";
+                    // Alert remaining friends about price change via Email and WhatsApp
+                    String text = "Notice: A member has left the shared group for '" + sub.getServiceName() + "'. " +
+                            "Your new monthly share amount is updated to: " + String.format("%.2f", newIndividualShare) + " SAR.";
 
                     notificationService.sendRealEmail(m.getFriendEmail(), sub.getUserId(), "Shared Group Budget Readjustment", text);
                     notificationService.sendRealWhatsApp(m.getFriendWhatsapp(), sub.getUserId(), text);
@@ -77,41 +84,44 @@ public class SubscriptionShareService {
             }
         }
     }
-
+    // Add a new member to share the subscription cost
     public void addShareMember(SubscriptionShare ss) {
-        // [VALIDATION 1]: Cross-check subscription existence
+        // 1. Verify subscription existence
         Subscription sub = subscriptionRepository.findSubscriptionById(ss.getSubscriptionId());
-        if (sub == null) throw new ApiException("Subscription targeted not found");
-
-        // [VALIDATION 2]: ENFORCED PRIVACY CONSTRAINT
-        // Strict guardrail to block personal tiers (Fitness/Education) from being shared or split
-        Category cat = categoryRepository.findCategoriesById(sub.getCategoryId());
-        if (cat != null && (cat.getName().equals("Fitness") || cat.getName().equals("Education"))) {
-            throw new ApiException("Security Block: This service category is personal (Fitness/Education) and cannot be shared!");
+        if (sub == null) {
+            throw new ApiException("Subscription targeted not found");
         }
 
-        // Set a baseline initial amount to prevent database constraint violation exceptions
+        // 2. Security Guardrail: Block sharing for personal categories like Fitness and Education
+        Category cat = categoryRepository.findCategoriesById(sub.getCategoryId());
+        if (cat != null && (cat.getName().equals("Fitness") || cat.getName().equals("Education"))) {
+            throw new ApiException("Cannot share subscription, this service category is personal");
+        }
+
+        // Set baseline share amount before saving to database
         ss.setShareAmount(0.0);
         subscriptionShareRepository.save(ss);
 
-        // Fetch total active members pool and calculate fair-share mathematical split equation
+        // 3. Fetch all active members in this group to calculate the fair-share equation
         List<SubscriptionShare> members = subscriptionShareRepository.giveMeMembersBySubscriptionId(sub.getId());
-        double splitCount = members.size() + 1; // Registered Friends + Owner account profile
+        double splitCount = members.size() + 1; // Registered friends + Owner profile account
         double individualShare = sub.getPrice() / splitCount;
 
-        // Sync and re-balance financial weights across all group elements
+        // Loop to update all group members with the new fair share price weight
         for (SubscriptionShare m : members) {
             m.setShareAmount(individualShare);
             subscriptionShareRepository.save(m);
         }
     }
-
+    // Send automated payment reminders to friends via Email and WhatsApp
     public void requestFriendPayment(Integer shareId) {
-        // [VALIDATION 1]: Check member existence profile
+        // 1. Verify if friend record profile exists
         SubscriptionShare ss = subscriptionShareRepository.giveMeSubscriptionShareById(shareId);
-        if (ss == null) throw new ApiException("Shared member record not found");
+        if (ss == null) {
+            throw new ApiException("Shared member record not found");
+        }
 
-        // [VALIDATION 2]: Prevent spamming or collecting debts for already settled ledgers
+        // 2. Prevent sending debt alerts if payment status is already PAID
         if (ss.getPaymentStatus().equals("PAID")) {
             throw new ApiException("This member has already settled the payment");
         }
@@ -119,51 +129,49 @@ public class SubscriptionShareService {
         Subscription sub = subscriptionRepository.findSubscriptionById(ss.getSubscriptionId());
         User owner = userRepository.findUserById(sub.getUserId());
 
-        // Construct dynamic formal text body to bypass social awkwardness during collection
-        String text = "Hello " + ss.getFriendName() + ", this is an automated reminder from SubscriptionTracker. Your share for " + sub.getServiceName() + " is due. Amount: " + ss.getShareAmount() + " SAR. Please settle it with " + owner.getUsername();
+        // Create polite reminder text body
+        String text = "Hello " + ss.getFriendName() + ", this is a reminder from SubscriptionTracker. Your share for " 
+                + sub.getServiceName() + " is due. Amount: " + ss.getShareAmount() + " SAR. Please settle it with " + owner.getUsername();
 
-        // Push actual real-time notifications to communication pipelines
+        // Push real-time notifications to communication pipelines
         notificationService.sendRealEmail(ss.getFriendEmail(), owner.getId(), "Subscription Payment Request", text);
         notificationService.sendRealWhatsApp(ss.getFriendWhatsapp(), owner.getId(), "💬 " + text);
     }
 
+    // Confirm that a friend has paid and update status to PAID
     public void confirmReceipt(Integer shareId) {
-        // [VALIDATION]: Check target member trace ledger existence
         SubscriptionShare ss = subscriptionShareRepository.giveMeSubscriptionShareById(shareId);
-        if (ss == null) throw new ApiException("Record not found");
+        if (ss == null) {
+            throw new ApiException("Record not found");
+        }
 
-        // Transition financial ledger status cleanly to settled state
+        // Change payment status to settled state
         ss.setPaymentStatus("PAID");
         subscriptionShareRepository.save(ss);
     }
-
+    // Get all shared groups belonging to a specific user
     public List<SubscriptionShare> getMySharedGroups(Integer userId) {
-        // [VALIDATION]: Verify target user profile  before execution
         if (userRepository.findUserById(userId) == null) {
             throw new ApiException("User not found");
         }
 
         List<SubscriptionShare> groups = subscriptionShareRepository.giveMeAllSharedGroupsForUser(userId);
-        // [EMPTY CHECK]: Verify if this user has any active shared groups configured
         if (groups.isEmpty()) {
-            throw new ApiException("Query Result: This user account is not managing or belonging to any shared split groups");
+            throw new ApiException("This user account does not belong to any shared split groups");
         }
         return groups;
     }
 
+    // Get a list of friends who have not paid their shares yet
     public List<SubscriptionShare> getUnpaidFriends(Integer userId) {
-        // [VALIDATION]: Verify target user profile  before pulling financial blacklist array
         if (userRepository.findUserById(userId) == null) {
             throw new ApiException("User not found");
         }
 
         List<SubscriptionShare> unpaidList = subscriptionShareRepository.giveMeUnpaidFriendsForUser(userId);
-        // [EMPTY CHECK]:if no friend is currently delaying the accounting records
         if (unpaidList.isEmpty()) {
-            throw new ApiException("Query Result: Perfect ledger! Zero unpaid friends found delaying payments for this user portfolio");
+            throw new ApiException("Perfect balance, zero unpaid friends found delaying payments");
         }
         return unpaidList;
     }
 }
-
-
