@@ -14,30 +14,34 @@ public class NotificationService {
     private final WhatsAppService whatsAppService;
     private final NotificationLogRepository notificationLogRepository;
 
+    // Method to send real email and log it to database
     public void sendRealEmail(String toEmail, Integer userId, String subject, String body) {
         try {
-
             emailService.sendEmail(toEmail, subject, body);
-
+            
+            // Save log history
             notificationLogRepository.save(new NotificationLog(null, userId, LocalDateTime.now(), "EMAIL", body));
-            System.out.println("📧 [SUCCESS] Real Email sent via EmailService to: " + toEmail);
+            System.out.println("Email sent successfully to: " + toEmail);
         } catch (Exception ex) {
-            System.out.println("❌ [EMAIL ERROR] Logging backup: " + ex.getMessage());
-            notificationLogRepository.save(new NotificationLog(null, userId, LocalDateTime.now(), "EMAIL", "[SEND_ERROR] " + body));
+            System.out.println("Error sending email: " + ex.getMessage());
+            notificationLogRepository.save(new NotificationLog(null, userId, LocalDateTime.now(), "EMAIL", "Error: " + body));
         }
     }
 
+    // Method to send real WhatsApp and log it to database
     public void sendRealWhatsApp(String targetPhone, Integer userId, String messageText) {
         try {
+            // Clean phone number from plus sign
             String cleanPhone = targetPhone.replace("+", "");
 
             whatsAppService.sendWhatsAppMessage(cleanPhone, messageText);
 
+            // Save log history
             notificationLogRepository.save(new NotificationLog(null, userId, LocalDateTime.now(), "WHATSAPP", messageText));
-            System.out.println("💬 [SUCCESS] Real WhatsApp sent via WhatsAppService to: " + cleanPhone);
+            System.out.println("WhatsApp message sent successfully to: " + cleanPhone);
         } catch (Exception ex) {
-            System.out.println("❌ [WHATSAPP ERROR] Logging backup: " + ex.getMessage());
-            notificationLogRepository.save(new NotificationLog(null, userId, LocalDateTime.now(), "WHATSAPP", "[SEND_ERROR] " + messageText));
+            System.out.println("Error sending WhatsApp: " + ex.getMessage());
+            notificationLogRepository.save(new NotificationLog(null, userId, LocalDateTime.now(), "WHATSAPP", "Error: " + messageText));
         }
     }
 }
