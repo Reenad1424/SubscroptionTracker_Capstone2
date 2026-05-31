@@ -11,7 +11,7 @@ public class Category {
     private Integer id;
 
     @NotEmpty(message = "Category name cannot be empty")
-    @Pattern(regexp = "^(Services|Fitness|Education|Others)$", message = "Category must be 'Services', 'Fitness', 'Education', or 'Others' only")
+    @Pattern(regexp = "^(Services|Fitness|Education)$", message = "Category must be 'Services', 'Fitness', or 'Education' only")
     @Column(length = 15, nullable = false, unique = true)
     private String name;
 }
