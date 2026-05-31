@@ -40,8 +40,7 @@ public class Subscription {
     @Column(nullable = true)
     private LocalDate nextPaymentDate;
 
-    @NotEmpty(message = "Status cannot be empty")
-    @Pattern(regexp = "^(ACTIVE|PAUSED|CANCELLED)$", message = "Status must be ACTIVE, PAUSED, or CANCELLED")
     @Column(length = 15, nullable = false)
-    private String status;
+    private String status = "ACTIVE"; 
+
 }
