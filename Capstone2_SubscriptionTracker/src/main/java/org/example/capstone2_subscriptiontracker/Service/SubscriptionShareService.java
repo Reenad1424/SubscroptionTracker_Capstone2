@@ -85,34 +85,30 @@ public class SubscriptionShareService {
         }
     }
     // Add a new member to share the subscription cost
-    public void addShareMember(SubscriptionShare ss) {
-        // 1. Verify subscription existence
+        public void addShareMember(SubscriptionShare ss) {
         Subscription sub = subscriptionRepository.findSubscriptionById(ss.getSubscriptionId());
-        if (sub == null) {
-            throw new ApiException("Subscription targeted not found");
-        }
+        if (sub == null) throw new ApiException("Subscription targeted not found");
 
-        // 2. Security Guardrail: Block sharing for personal categories like Fitness and Education
         Category cat = categoryRepository.findCategoriesById(sub.getCategoryId());
         if (cat != null && (cat.getName().equals("Fitness") || cat.getName().equals("Education"))) {
             throw new ApiException("Cannot share subscription, this service category is personal");
         }
 
-        // Set baseline share amount before saving to database
+        ss.setPaymentStatus("UNPAID");
         ss.setShareAmount(0.0);
+        
         subscriptionShareRepository.save(ss);
 
-        // 3. Fetch all active members in this group to calculate the fair-share equation
         List<SubscriptionShare> members = subscriptionShareRepository.giveMeMembersBySubscriptionId(sub.getId());
-        double splitCount = members.size() + 1; // Registered friends + Owner profile account
+        double splitCount = members.size() + 1; 
         double individualShare = sub.getPrice() / splitCount;
 
-        // Loop to update all group members with the new fair share price weight
         for (SubscriptionShare m : members) {
             m.setShareAmount(individualShare);
             subscriptionShareRepository.save(m);
         }
     }
+
     // Send automated payment reminders to friends via Email and WhatsApp
     public void requestFriendPayment(Integer shareId) {
         // 1. Verify if friend record profile exists
