@@ -32,8 +32,7 @@ public class SubscriptionShare {
     @Column(nullable = false)
     private Double shareAmount = 0.0;
 
-    @NotEmpty(message = "Payment status cannot be empty")
-    @Pattern(regexp = "^(PAID|UNPAID)$")
     @Column(length = 10, nullable = false)
     private String paymentStatus = "UNPAID";
+
 }
