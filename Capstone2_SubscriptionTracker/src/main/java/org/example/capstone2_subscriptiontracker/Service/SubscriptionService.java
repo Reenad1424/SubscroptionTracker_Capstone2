@@ -32,34 +32,32 @@ public class SubscriptionService {
     }
 
     // Add a new subscription with budget check
-    public void add(Subscription s) {
-        // 1. Verify if user exists
+       public void add(Subscription s) {
         User user = userRepository.findUserById(s.getUserId());
         if (user == null) {
             throw new ApiException("User not found");
         }
 
-        // 2. Verify if category exists
         if (categoryRepository.findCategoriesById(s.getCategoryId()) == null) {
             throw new ApiException("Category not found");
         }
 
-        // 3. Calculate total spending of the user to check the budget limit
         Double currentSpending = subscriptionRepository.calculateTotalActiveSpending(s.getUserId());
         if (currentSpending == null) currentSpending = 0.0;
 
-        // 4. Block adding if it exceeds user monthly budget limit
         if (currentSpending + s.getPrice() > user.getMonthlyBudget()) {
             throw new ApiException("Cannot add subscription, it exceeds your monthly budget");
         }
 
+        s.setStatus("ACTIVE"); 
+
         subscriptionRepository.save(s);
 
-        // 5. Send confirmation alerts via email and whatsapp
         String msg = "New subscription added: " + s.getServiceName() + " | Price: " + s.getPrice() + " SAR.";
         notificationService.sendRealEmail(user.getEmail(), user.getId(), "Subscription Registered", msg);
         notificationService.sendRealWhatsApp(user.getWhatsappNumber(), user.getId(), "✅ " + msg);
     }
+
 
     // Update subscription details with a budget re-check formula
     public void update(Integer id, Subscription s) {
